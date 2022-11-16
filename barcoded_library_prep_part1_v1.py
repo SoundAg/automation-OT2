@@ -108,10 +108,11 @@ def run(protocol: protocol_api.ProtocolContext):
     destinationWellIndex = 0
 
     sourceLocation = reagent_tube_carrier.wells()[sourceWellIndex]
-    destinationLocation = temp_plate.wells()[destinationWellIndex].top(2.0)
+    destinationLocation = temp_plate.wells()[destinationWellIndex].top(2.0) # Dispense from just barely inside the well
 
     p20x1.flow_rate.aspirate = 15  # 2x p20 single gen2 default flowrate = 15.2 ul/sec
     p20x1.flow_rate.dispense = 15
+    p20x1.flow_rate.blow_out = 15 # Increase blowout speed to compensate for higher dispense height
     p20x1.transfer(volume=ampure_xp_beads,
                    source=sourceLocation,
                    dest=destinationLocation,
@@ -123,20 +124,20 @@ def run(protocol: protocol_api.ProtocolContext):
                    mix_before=(5, 20),
                    #mix_after=(1, 20),
                    carryover=True)
-
+   
     total_rxn_volume += ampure_xp_beads
-
+    
     # Very slow sample mix to replace Hula mixing step
     p300x8.flow_rate.aspirate = 18  # 90ul at 18/sec = 1 mix cycle per 10 sec = 6 cycles/min; 10min = 60 cycles
     p300x8.flow_rate.dispense = 18
     p300x8.pick_up_tip()
-    p300x8.mix(repetitions=60,
+    p300x8.mix(repetitions=50,
                volume=total_rxn_volume,
                location=temp_plate.wells()[0].bottom(1.0),
                rate=1.0)
 
     # Transfer samples from temp module plate to mag module plate
-    p300x8.flow_rate.aspirate = 18
+    p300x8.flow_rate.aspirate = 18 
     p300x8.flow_rate.dispense = 94
     p300x8.aspirate(volume=total_rxn_volume,
                     location=temp_plate.wells()[0].bottom(0.25),
@@ -149,7 +150,8 @@ def run(protocol: protocol_api.ProtocolContext):
     p300x8_tips1.return_tips(start_well=p300x8_tips1.wells()[0],num_channels=8)
 
     # Engage magnet module to pellet magbeads
-    magnetic_module.engage(height=11) # NEEDS TO BE TESTED STILL. Try height_from_base instead in future.
+    mag_engage_height = 15 # This should bring magbeads to the center/right (odd-number columns) or center/left(even-number columns) of wells. Reused in subsequent mag module steps.
+    magnetic_module.engage(height=mag_engage_height) 
     protocol.delay(seconds=0, minutes=2, msg="Wait for magnetic beads to pellet")
 
     # Remove supernatant from magbeads
@@ -157,7 +159,7 @@ def run(protocol: protocol_api.ProtocolContext):
     p300x8.flow_rate.dispense = 94
     p300x8.pick_up_tip()
     p300x8.aspirate(volume=total_rxn_volume,
-                    location=mag_plate.wells()[0].bottom(0.25),
+                    location=mag_plate.wells()[0].bottom(0.5),
                     rate=0.25) # 25% very slow aspirate speed
     p300x8.drop_tip() # VERIFY THAT NO BLOWOUT IS NEEDED IN TRASH
 
@@ -181,7 +183,7 @@ def run(protocol: protocol_api.ProtocolContext):
                     location=destinationLocation,
                     rate=2.0) # 200% fast forceful dispense
 
-    for mix in range(0,3): # 3 EtOH washes
+    for mix in range(0,5): # 5 EtOH washes
         p300x8.aspirate(volume=ethanol_volume,
                         location=mag_plate.wells()[0].bottom(1.0),
                         rate=1.0)
@@ -190,12 +192,12 @@ def run(protocol: protocol_api.ProtocolContext):
                         rate=2.0)
 
     # Engage magnet module to pellet magbeads
-    magnetic_module.engage(height=11)  # NEEDS TO BE TESTED STILL. Try height_from_base instead in future.
+    magnetic_module.engage(height=mag_engage_height) 
     protocol.delay(seconds=0, minutes=2, msg="Wait for magnetic beads to pellet")
 
     # Remove Ethanol from magbeads
     p300x8.aspirate(volume=ethanol_volume,
-                    location=mag_plate.wells()[0].bottom(0.25),
+                    location=mag_plate.wells()[0].bottom(0.5),
                     rate=0.25) # 25% very slow aspirate speed
     p300x8.air_gap(volume=20)  # 20ul airgap to keep ethanol from dripping
     p300x8.drop_tip() # VERIFY THAT NO BLOWOUT IS NEEDED IN TRASH
@@ -213,7 +215,7 @@ def run(protocol: protocol_api.ProtocolContext):
                     location=destinationLocation,
                     rate=2.0)  # 200% fast forceful dispense
 
-    for mix in range(0, 3):  # 3 EtOH washes
+    for mix in range(0, 5):  # 5 EtOH washes
         p300x8.aspirate(volume=ethanol_volume,
                         location=mag_plate.wells()[0].bottom(1.0),
                         rate=1.0)
@@ -222,12 +224,12 @@ def run(protocol: protocol_api.ProtocolContext):
                         rate=2.0)
 
     # Engage magnet module to pellet magbeads
-    magnetic_module.engage(height=11)  # NEEDS TO BE TESTED STILL. Try height_from_base instead in future.
+    magnetic_module.engage(height=mag_engage_height)
     protocol.delay(seconds=0, minutes=2, msg="Wait for magnetic beads to pellet")
 
     # Remove Ethanol from magbeads
     p300x8.aspirate(volume=ethanol_volume,
-                    location=mag_plate.wells()[0].bottom(0.25),
+                    location=mag_plate.wells()[0].bottom(0.5),
                     rate=0.25)  # 25% very slow aspirate speed
     p300x8.air_gap(volume=20) # 20ul airgap to keep ethanol from dripping
     p300x8.drop_tip()  # VERIFY THAT NO BLOWOUT IS NEEDED IN TRASH
@@ -250,7 +252,7 @@ def run(protocol: protocol_api.ProtocolContext):
                     location=destinationLocation,
                     rate=2.0)  # 200% fast forceful dispense
 
-    for mix in range(0, 5):  # 3 water washes
+    for mix in range(0, 5):  # 5 water washes
         p300x8.aspirate(volume=water_volume,
                         location=mag_plate.wells()[0].bottom(0.5),
                         rate=0.5) # 50% slow aspirate speed to avoid air bubbles
@@ -263,10 +265,12 @@ def run(protocol: protocol_api.ProtocolContext):
     protocol.delay(seconds=0, minutes=2, msg="Incubate at room temp while gDNA elutes")
 
     # Engage magnet module to pellet magbeads
-    magnetic_module.engage(height=11)  # NEEDS TO BE TESTED STILL. Try height_from_base instead in future.
+    magnetic_module.engage(height=mag_engage_height)  
     protocol.delay(seconds=0, minutes=2, msg="Wait for magnetic beads to pellet")
 
     # Separate eluate from magbeads
+    p300x8.flow_rate.aspirate = 23.5 # 25% default p300 multi gen2 aspirate speed
+    p300x8.flow_rate.dispense = 94 # Default p300 multi gen2 dispense speed
     p300x8.transfer(volume=water_volume,
                    source=mag_plate.wells()[0],
                    dest=temp_plate.wells()[8], # Dest is shifted over by 1 column for sample purity
