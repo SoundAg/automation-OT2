@@ -15,7 +15,6 @@ metadata = {
     'author': 'Max Benjamin'
 }
 
-
 def run(protocol: protocol_api.ProtocolContext):
     # Load modules into worktable locations
     magnetic_module = protocol.load_module('magnetic module gen2', 1)
@@ -52,29 +51,27 @@ def run(protocol: protocol_api.ProtocolContext):
     temperature_module.await_temperature(4)
 
     # Liquid handling commands for gDNA repair rxn setup #
-    p20x1.flow_rate.aspirate = 2.0  # p20 single gen2 default flowrate = 7.6 ul/sec
+    p20x1.flow_rate.aspirate = 2.0 # p20 single gen2 default flowrate = 7.6 ul/sec
     p20x1.flow_rate.dispense = 7.6
-    
-    sample_well_list = [0,1,2,3,4,5,8,9,10,11,12,13]
-    for well in range(0,12):
-        destinationWellIndex = sample_well_list[well]
 
-        reagent_tube_list = list(range(1, 5))
-        reagent_tube_index = 0
-        for tube in reagent_tube_list:
-            reagent_tube_index += 1
+    reagent_tube_list = list(range(1, 5))
+    reagent_tube_index = 0
+    for tube in reagent_tube_list:
+        reagent_tube_index += 1
+        sourceWellIndex = (reagent_tube_index - 1) * 4
 
-            if tube == 1:
-                transfer_volume = nebnext_ffpe_dna_repair_buffer
-            elif tube == 2:
-                transfer_volume = ultra_ii_end_prep_reaction_buffer
-            elif tube == 3:
-                transfer_volume = ultra_ii_end_prep_enzyme_mix
-            elif tube == 4:
-                transfer_volume = nebnext_ffpe_dna_repair_mix
+        if tube == 1:
+            transfer_volume = nebnext_ffpe_dna_repair_buffer
+        elif tube == 2:
+            transfer_volume = ultra_ii_end_prep_reaction_buffer
+        elif tube == 3:
+            transfer_volume = ultra_ii_end_prep_enzyme_mix
+        elif tube == 4:
+            transfer_volume = nebnext_ffpe_dna_repair_mix
 
-            sourceWellIndex = (reagent_tube_index - 1) * 4 
-
+        sample_well_list = [0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13]
+        for well in range(0, 12):
+            destinationWellIndex = sample_well_list[well]
             sourceLocation = reagent_tube_carrier.wells()[sourceWellIndex]
             destinationLocation = temp_plate.wells()[destinationWellIndex]
 
@@ -146,11 +143,11 @@ def run(protocol: protocol_api.ProtocolContext):
     p300x8.flow_rate.aspirate = 18  # 90ul at 18/sec = 1 mix cycle per 10 sec = 6 cycles/min; 10min = 60 cycles
     p300x8.flow_rate.dispense = 18
 
-    for cycle in range(0,5): # 5 cycles X 5 mixes per cycle, mixing 2 columns per cycle
+    for cycle in range(0,10): # 5 cycles X 2 mixes for each of 2 columns per cycle
         for column in range(0,2):
             columnIndex = column*8
             p300x8.pick_up_tip(location=p300x8_tips1.wells()[columnIndex])
-            p300x8.mix(repetitions=5,
+            p300x8.mix(repetitions=2,
                     volume=total_rxn_volume,
                     location=temp_plate.wells()[column].bottom(1.0),
                     rate=1.0)
@@ -203,7 +200,13 @@ def run(protocol: protocol_api.ProtocolContext):
     p300x8.pick_up_tip()
     for column in range(0,2): # Add EtOH to both columns to keep beads from drying 
         columnIndex = column*8
-        destinationLocation = mag_plate.wells()[columnIndex].top(1.0).move(types.Point(x=1.0, y=0, z=0)) # Upper-right in well
+
+        if column == 0:
+            x_offset = 1.0
+        elif column == 1:
+            x_offset = -1.0
+
+        destinationLocation = mag_plate.wells()[columnIndex].top(1.0).move(types.Point(x=x_offset, y=0, z=0)) # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
         
         p300x8.aspirate(volume=ethanol_volume,
                         location=sourceLocation,
@@ -215,8 +218,14 @@ def run(protocol: protocol_api.ProtocolContext):
 
     for column in range(0,2): # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
         columnIndex = column*8
+
+        if column == 0:
+            x_offset = 1.0
+        elif column == 1:
+            x_offset = -1.0
+
         sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0)
-        destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=1.0, y=0, z=0)) # Middle-right in well 
+        destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=x_offset, y=0, z=0)) # Middle-right (odd-number columns) or middle left (even-numbered columns) in well
 
         if column == 1:
             p300x8.pick_up_tip(location=p300x8_tips1.wells()[columnIndex])
@@ -256,7 +265,13 @@ def run(protocol: protocol_api.ProtocolContext):
     p300x8.pick_up_tip()
     for column in range(0,2): # Add EtOH to both columns to keep beads from drying 
         columnIndex = column*8
-        destinationLocation = mag_plate.wells()[columnIndex].top(1.0).move(types.Point(x=1.0, y=0, z=0)) # Upper-right in well
+
+        if column == 0:
+            x_offset = 1.0
+        elif column == 1:
+            x_offset = -1.0
+
+        destinationLocation = mag_plate.wells()[columnIndex].top(1.0).move(types.Point(x=x_offset, y=0, z=0)) # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
         
         p300x8.aspirate(volume=ethanol_volume,
                         location=sourceLocation,
@@ -268,9 +283,15 @@ def run(protocol: protocol_api.ProtocolContext):
 
     for column in range(0,2):  # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
         columnIndex = column * 8
+
+        if column == 0:
+            x_offset = 1.0
+        elif column == 1:
+            x_offset = -1.0
+
         sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0)
         destinationLocation = mag_plate.wells()[columnIndex].center().move(
-            types.Point(x=1.0, y=0, z=0))  # Middle-right in well
+            types.Point(x=x_offset, y=0, z=0))  # Middle-right (odd-numbered columns) or middle-left (even-numbered columns) in well
 
         if column == 1:
             p300x8.pick_up_tip(location=p300x8_tips1.wells()[columnIndex])
@@ -323,15 +344,21 @@ def run(protocol: protocol_api.ProtocolContext):
                     location=destinationLocation,
                     rate=2.0) # 200% fast forceful dispense
 
-    destinationLocation = mag_plate.wells()[8].top(1.0).move(types.Point(x=1.0, y=0, z=0)) # Upper-right in well; Second dispense
+    destinationLocation = mag_plate.wells()[8].top(1.0).move(types.Point(x=-1.0, y=0, z=0)) # Upper-left in well; Second dispense
     p300x8.dispense(volume=water_volume,
                     location=destinationLocation,
                     rate=2.0) # 200% fast forceful dispense
 
     for column in range(0,2): # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
         columnIndex = column*8
+
+        if column == 0:
+            x_offset = 1.0
+        elif column == 1:
+            x_offset = -1.0
+
         sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0)
-        destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=1.0, y=0, z=0)) # Middle-right in well 
+        destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=x_offset, y=0, z=0)) # Middle-right (odd-numbered columns) or middle-left (even-numbered columns) in well
 
         if column == 1:
             p300x8.pick_up_tip(location=p300x8_tips1.wells()[columnIndex])
