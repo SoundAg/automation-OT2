@@ -22,6 +22,7 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Set tip box locations #
     p20x1_tips1 = protocol.load_labware('opentrons_96_tiprack_20ul', 9)
+    p20x1_tips2 = protocol.load_labware('opentrons_96_tiprack_20ul', 8)
     p300x8_tips1 = protocol.load_labware('opentrons_96_tiprack_300ul', 6)
 
     # Set labware locations #
@@ -35,7 +36,7 @@ def run(protocol: protocol_api.ProtocolContext):
                                              label='LoBind PCR plate with Adapter Basepiece on Mag Module')
 
     # Set mounted pipette types #
-    p20x1 = protocol.load_instrument('p20_single_gen2', 'left', tip_racks=[p20x1_tips1])
+    p20x1 = protocol.load_instrument('p20_single_gen2', 'left', tip_racks=[p20x1_tips1, p20x1_tips2])
     p300x8 = protocol.load_instrument('p300_multi_gen2', 'right', tip_racks=[p300x8_tips1])
 
     # Declare liquid handling variables #
@@ -46,54 +47,66 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Liquid handling commands for barcoding rxn setup
     sample_well_list = [32,33,34,35,36,37,40,41,42,43,44,45]  # Well list for samples in columns 5 and 6
-    def rxn_setup_from_tubes(rxn_tube_count, sample_count):
+    def rxn_setup_from_tubes(sample_count):
         p20x1.flow_rate.aspirate = 2.0  # p20 single gen2 default flowrate = 7.6 ul/sec
         p20x1.flow_rate.dispense = 7.6
-        reagent_tube_list = list(range(0, rxn_tube_count))
-        reagent_tube_index = 0
-        for tube in reagent_tube_list:
-            sourceWellIndex = reagent_tube_index * 4
-            if tube == 0:
-                transfer_volume = native_barcode_volume
-                tube_adjustment_offset = 19
-                pipetting_loops = 1
-            elif tube == 1:
-                transfer_volume = blunt_ta_ligase_mastermix_volume/2
-                tube_adjustment_offset = 1
-                pipetting_loops = 2
 
-            for loop in range(0, pipetting_loops):
-                for well in range(0, sample_count):
-                    destinationWellIndex = sample_well_list[well]
-                    sourceLocation = reagent_tube_carrier.wells()[sourceWellIndex]
-                    destinationLocation = temp_plate.wells()[destinationWellIndex]
-                    p20x1.pick_up_tip()
-                    p20x1.aspirate(volume=transfer_volume,
-                                   location=sourceLocation.bottom(tube_adjustment_offset),
-                                   rate=1.0) # p20 gen2 single flow rate set to 2ul/sec above
-                    # Move commands to mimic a tip-wipe to eliminate reagent droplets
-                    tip_wipe_x_offset = 4.5
+        # Liquid handling for barcode tube dispensing
+        barcode_tube_count = sample_count # 12 barcode tubes
+        for tube in list(range(0, barcode_tube_count)):
+            sourceLocation = reagent_tube_carrier.wells()[tube]
+            destinationLocation = temp_plate.wells()[sample_well_list[tube]]
+            tube_adjustment_offset = 19
+            transfer_volume = native_barcode_volume
+
+            p20x1.pick_up_tip()
+            p20x1.aspirate(volume=transfer_volume,
+                           location=sourceLocation.bottom(tube_adjustment_offset),
+                           rate=1.0)  # p20 gen2 single flow rate set to 2ul/sec above
+            p20x1.dispense(volume=transfer_volume,
+                           location=destinationLocation.bottom(2.0),
+                           rate=1.0)  # p20 gen2 single flow rate set to 7.6ul/sec above
+            p20x1.mix(repetitions=1,
+                      volume=transfer_volume,
+                      rate=2.0)  # Mix can be 200% faster than transfer
+            p20x1.blow_out()
+            p20x1.drop_tip()
+
+        # Liquid handling for blunt ta ligase mastermix dispensing
+        reagent_tube_index = 12
+        for destination_well in list(range(0, sample_count)):
+            sourceLocation = reagent_tube_carrier.wells()[reagent_tube_index]
+            destinationLocation = temp_plate.wells()[sample_well_list[destination_well]]
+            transfer_volume = blunt_ta_ligase_mastermix_volume/2
+            p20x1.pick_up_tip()
+            for dispense in list((range(0,2))):
+                p20x1.aspirate(volume=transfer_volume,
+                               location=sourceLocation.bottom(1.0),
+                               rate=1.0)  # p20 gen2 single flow rate set to 2ul/sec above
+
+                # Move commands to mimic a tip-wipe to eliminate reagent droplets
+                for tip_wipe in range(0, 2):
+                    if tip_wipe == 0:
+                        tip_wipe_x_offset = 4.5
+                    elif tip_wipe == 1:
+                        tip_wipe_x_offset = -4.5
+
                     p20x1.move_to(location=sourceLocation.top().move(types.Point(x=tip_wipe_x_offset, y=0, z=0)),
-                                  speed=80,
+                                  speed=60,
                                   publish=False)
                     p20x1.move_to(location=sourceLocation.top(-5.0).move(types.Point(x=tip_wipe_x_offset, y=0, z=0)),
-                                  speed=80, # Default is 400mm/sec; set to Tip-touch max of 80mm/sec
+                                  speed=60,  # Default is 400mm/sec; set to Tip-touch max of 80mm/sec
                                   publish=False)
                     p20x1.move_to(location=sourceLocation.top().move(types.Point(x=tip_wipe_x_offset, y=0, z=0)),
-                                  speed=80,
+                                  speed=60,
                                   publish=False)
-                    # Dispense/mix/blowout commands
-                    p20x1.dispense(volume=transfer_volume,
-                                   location=destinationLocation.bottom(2.0),
-                                   rate=1.0)  # p20 gen2 single flow rate set to 7.6ul/sec above
-                    p20x1.mix(repetitions=1,
-                              volume=(transfer_volume),
-                              # location=,
-                              rate=2.0)  # Mix can be 200% faster than transfer
-                    p20x1.blow_out()
-                    p20x1.drop_tip()
-            reagent_tube_index += 1
-    rxn_setup_from_tubes(2,12)
+
+                p20x1.dispense(volume=transfer_volume,
+                               location=destinationLocation.top(-1.0),
+                               rate=1.0)  # p20 gen2 single flow rate set to 7.6ul/sec above
+                p20x1.blow_out()
+            p20x1.drop_tip()
+    rxn_setup_from_tubes(12)
 
     # Mix barcoding rxn and incubate for 20min at 20C
     def pre_incubation_mix(column_count):
@@ -168,7 +181,7 @@ def run(protocol: protocol_api.ProtocolContext):
         for column in range(0, column_count):
             columnIndex = 32 + (column * 8) # Well Index 32 to start at column 5
             tipLocation = p300x8_tips1.wells()[column*8]
-            sourceLocation = temp_plate.wells()[columnIndex].bottom(1.0)
+            sourceLocation = temp_plate.wells()[columnIndex].bottom(0)
             destinationLocation = mag_plate.wells()[columnIndex].center()
             p300x8.pick_up_tip(location=tipLocation)
             p300x8.aspirate(volume=transfer_volume,
@@ -188,16 +201,16 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Remove supernatant from magbeads
     def supernatant_removal(column_count):
-        p300x8.flow_rate.aspirate = 9.4  # Slow flow rate to minimize magbead loss
-        p300x8.flow_rate.dispense = 9.4
+        p300x8.flow_rate.aspirate = 94  # Slow flow rate to minimize magbead loss
+        p300x8.flow_rate.dispense = 94
         for column in range(0, column_count):
             columnIndex = 32 + (column * 8) # Well Index 32 to start at column 5
             tipLocation = p300x8_tips1.wells()[column*8]
 
             if column == 0:
-                x_offset = -1.5
-            if column == 1:
                 x_offset = 1.5
+            if column == 1:
+                x_offset = -1.5
 
             sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left/bottom right well locations
 
@@ -212,7 +225,7 @@ def run(protocol: protocol_api.ProtocolContext):
     def gentle_ethanol_wash(column_count, new_tip_index, residual_ethanol_removal_volume):
         # Add Ethanol to all wells
         ethanol_volume = 200
-        sourceLocation = ethanol_reservoir.wells()[0].bottom(2.0)
+        sourceLocation = ethanol_reservoir.wells()[0].bottom(1.5)
         p300x8.flow_rate.aspirate = 94  # Default flow rate
         p300x8.flow_rate.dispense = 94
 
@@ -221,11 +234,11 @@ def run(protocol: protocol_api.ProtocolContext):
             columnIndex = 32 + (column * 8)
 
             if column == 0:
-                x_offset = 1.5
-            elif column == 1:
                 x_offset = -1.5
+            elif column == 1:
+                x_offset = 1.5
 
-            destinationLocation = mag_plate.wells()[columnIndex].top(-1.0).move(types.Point(x=x_offset, y=0, z=0))  # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
+            destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=x_offset, y=0, z=0))  # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
 
             p300x8.aspirate(volume=ethanol_volume,
                             location=sourceLocation,
@@ -241,11 +254,11 @@ def run(protocol: protocol_api.ProtocolContext):
             tipLocation = p300x8_tips1.wells()[column*8]
 
             if column == 0:
-                aspirate_x_offset = -1.5
-                dispense_x_offset = 1.5
-            elif column == 1:
                 aspirate_x_offset = 1.5
                 dispense_x_offset = -1.5
+            elif column == 1:
+                aspirate_x_offset = -1.5
+                dispense_x_offset = 1.5
 
             sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
             destinationLocation = mag_plate.wells()[columnIndex].top(-2.0).move(types.Point(x=dispense_x_offset, y=0, z=0))  # Top-right (odd-number columns) or left (even-numbered columns) in well
@@ -268,11 +281,11 @@ def run(protocol: protocol_api.ProtocolContext):
             columnIndex = 32 + (column * 8)
 
             if column == 0:
-                aspirate_x_offset = -1.5
-            elif column == 1:
                 aspirate_x_offset = 1.5
+            elif column == 1:
+                aspirate_x_offset = -1.5
 
-            sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
+            sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
 
             p300x8.pick_up_tip()
             p300x8.aspirate(volume=ethanol_volume+residual_ethanol_removal_volume,
@@ -295,6 +308,9 @@ def run(protocol: protocol_api.ProtocolContext):
     # Elute gDNA from magbeads
     def water_elution(column_count, water_volume):
         # Water addition
+        p300x8.flow_rate.aspirate = 94  # Reset flow rate to default
+        p300x8.flow_rate.dispense = 94  # Reset flow rate to default
+
         water_volume += 5  # 5uL dead volume added
         sourceLocation = water_reservoir.wells()[0]
 
@@ -306,9 +322,9 @@ def run(protocol: protocol_api.ProtocolContext):
         for dispense in range(0,column_count):
             columnIndex = 32 + (dispense * 8)
             if dispense == 0:
-                dispense_x_offset = 1.5
-            elif dispense == 1:
                 dispense_x_offset = -1.5
+            elif dispense == 1:
+                dispense_x_offset = 1.5
             destinationLocation = mag_plate.wells()[columnIndex].top(-1.0).move(types.Point(x=dispense_x_offset, y=0, z=0))
 
             p300x8.dispense(volume=water_volume,
@@ -322,11 +338,11 @@ def run(protocol: protocol_api.ProtocolContext):
         for column in range(0,column_count):
             columnIndex = 32 + (column * 8)
             if column == 0:
-                aspirate_x_offset = -1.5
-                dispense_x_offset = 1.5
-            elif column == 1:
                 aspirate_x_offset = 1.5
                 dispense_x_offset = -1.5
+            elif column == 1:
+                aspirate_x_offset = -1.5
+                dispense_x_offset = 1.5
             sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))
             destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=dispense_x_offset, y=0, z=0))
 
@@ -349,7 +365,7 @@ def run(protocol: protocol_api.ProtocolContext):
         # Engage magnet module to pellet magbeads
         magnetic_module.engage(height=mag_engage_height)
         protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
-    water_elution(2,31) # 5ul extra water added to elution volume
+    water_elution(2,26) # 5ul extra water added to elution volume
 
     # Transfer eluate from mag module plate to temp module plate
     def mag_to_temp_transfer(column_count, transfer_volume):
@@ -362,11 +378,11 @@ def run(protocol: protocol_api.ProtocolContext):
             destinationColumnIndex = 16 + sourceColumnIndex
 
             if column == 0:
-                aspirate_x_offset = -1.5
-            elif column == 1:
                 aspirate_x_offset = 1.5
+            elif column == 1:
+                aspirate_x_offset = -1.5
 
-            sourceLocation = mag_plate.wells()[sourceColumnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
+            sourceLocation = mag_plate.wells()[sourceColumnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
             destinationLocation = temp_plate.wells()[destinationColumnIndex].bottom(1.0)
 
             p300x8.transfer(volume=transfer_volume,
