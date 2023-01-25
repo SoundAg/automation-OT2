@@ -1,8 +1,8 @@
-# Script name: barcoded_library_prep_part2_v2.py
+# Script name: BLP_part2_vFinal_12132022.py
 # Directory path: cd C:\Users\Max\PycharmProjects\pythonProject\ot2_scripting
-# Command line simulation = opentrons_simulate.exe barcoded_library_prep_part2_v2.py -e
+# Command line simulation = opentrons_simulate.exe BLP_part2_vFinal_12132022.py -e
 
-# FIRST VERSION OF SCRIPT (v2)
+# SECOND VERSION OF SCRIPT, FINAL MAJOR UPDATES (vFinal)
 # Handles 12 samples at a time
 
 from opentrons import protocol_api
@@ -102,7 +102,7 @@ def run(protocol: protocol_api.ProtocolContext):
                                   publish=False)
 
                 p20x1.dispense(volume=transfer_volume,
-                               location=destinationLocation.top(-1.0),
+                               location=destinationLocation.top(-4.0),
                                rate=1.0)  # p20 gen2 single flow rate set to 7.6ul/sec above
                 p20x1.blow_out()
             p20x1.drop_tip()
@@ -140,7 +140,7 @@ def run(protocol: protocol_api.ProtocolContext):
         p20x1.pick_up_tip()
         for well in range(0, sample_count):
             destinationWellIndex = sample_well_list[well]
-            destinationLocation = temp_plate.wells()[destinationWellIndex].top(-2.0)  # Dispense from just barely inside the well
+            destinationLocation = temp_plate.wells()[destinationWellIndex].top(-4.0)  # Dispense from just barely inside the well
             p20x1.transfer(volume=ampure_xp_beads_volume,
                         source=sourceLocation,
                         dest=destinationLocation,
@@ -181,10 +181,10 @@ def run(protocol: protocol_api.ProtocolContext):
         for column in range(0, column_count):
             columnIndex = 32 + (column * 8) # Well Index 32 to start at column 5
             tipLocation = p300x8_tips1.wells()[column*8]
-            sourceLocation = temp_plate.wells()[columnIndex].bottom(0)
+            sourceLocation = temp_plate.wells()[columnIndex].bottom(1.0)
             destinationLocation = mag_plate.wells()[columnIndex].center()
             p300x8.pick_up_tip(location=tipLocation)
-            p300x8.aspirate(volume=transfer_volume,
+            p300x8.aspirate(volume=transfer_volume, # Extra volume to get everything
                             location=sourceLocation,
                             rate=0.1)  # 10% default flowrate for better aspiration at well bottom
             p300x8.dispense(volume=transfer_volume,
@@ -192,11 +192,10 @@ def run(protocol: protocol_api.ProtocolContext):
                             rate=1.0)
             p300x8.blow_out()
             p300x8.drop_tip(location=tipLocation)
-    temp_to_mag_transfer(2,total_rxn_volume)
+    temp_to_mag_transfer(2,total_rxn_volume+100)
 
     # Engage magnet module to pellet magbeads
-    mag_engage_height = 12.0  # This should bring magbeads to the bottom/right (odd-number columns) or bottom/left(even-number columns) of wells.
-    magnetic_module.engage(height=mag_engage_height)
+    magnetic_module.engage(12) # This should bring magbeads to the bottom/right (odd-number columns) or bottom/left(even-number columns)
     protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
 
     # Remove supernatant from magbeads
@@ -212,7 +211,7 @@ def run(protocol: protocol_api.ProtocolContext):
             if column == 1:
                 x_offset = 1.5
 
-            sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left/bottom right well locations
+            sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left/bottom right well locations
 
             p300x8.pick_up_tip(location=tipLocation)
             p300x8.aspirate(volume=total_rxn_volume,
@@ -261,7 +260,7 @@ def run(protocol: protocol_api.ProtocolContext):
                 dispense_x_offset = -1.5
 
             sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
-            destinationLocation = mag_plate.wells()[columnIndex].top(-2.0).move(types.Point(x=dispense_x_offset, y=0, z=0))  # Top-right (odd-number columns) or left (even-numbered columns) in well
+            destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=dispense_x_offset, y=0, z=0))  # Top-right (odd-number columns) or left (even-numbered columns) in well
 
             if column == 1:
                 p300x8.pick_up_tip(location=p300x8_tips1.wells()[new_tip_index])
@@ -285,7 +284,7 @@ def run(protocol: protocol_api.ProtocolContext):
             elif column == 1:
                 aspirate_x_offset = 1.5
 
-            sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
+            sourceLocation = mag_plate.wells()[columnIndex].bottom(-0.5).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
 
             p300x8.pick_up_tip()
             p300x8.aspirate(volume=ethanol_volume+residual_ethanol_removal_volume,
@@ -303,7 +302,7 @@ def run(protocol: protocol_api.ProtocolContext):
     magnetic_module.disengage()
 
     # Delay to evaporate residual Ethanol
-    protocol.delay(seconds=0, minutes=1, msg="Wait for residual Ethanol to evaporate")
+    protocol.delay(seconds=0, minutes=2, msg="Wait for residual Ethanol to evaporate")
 
     # Elute gDNA from magbeads
     def water_elution(column_count, water_volume):
@@ -325,14 +324,14 @@ def run(protocol: protocol_api.ProtocolContext):
                 dispense_x_offset = 1.5
             elif dispense == 1:
                 dispense_x_offset = -1.5
-            destinationLocation = mag_plate.wells()[columnIndex].top(-1.0).move(types.Point(x=dispense_x_offset, y=0, z=0))
+            destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=dispense_x_offset, y=0, z=0))
 
             p300x8.dispense(volume=water_volume,
                             location=destinationLocation,
                             rate=1.0)  # Standard water dispense
             p300x8.touch_tip()
 
-        p300x8.blow_out(sourceLocation.top())
+        p300x8.blow_out(sourceLocation.top(-4.0))
 
         # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
         for column in range(0,column_count):
@@ -349,13 +348,13 @@ def run(protocol: protocol_api.ProtocolContext):
             if column == 1:
                 p300x8.pick_up_tip()
 
-            for mix in range(0, 5):  # 5 Water washes
+            for mix in range(0, 15):  # 15 Water washes
                 p300x8.aspirate(volume=water_volume,
                                 location=sourceLocation,
-                                rate=0.25) # Slow aspirate to avoid gDNA shearing
+                                rate=1.0) 
                 p300x8.dispense(volume=water_volume,
                                 location=destinationLocation,
-                                rate=0.5)  # 50% faster dispense to knock magbeads off well sides
+                                rate=3.0)  # Faster dispense to knock magbeads off well sides
             p300x8.blow_out(destinationLocation)
             p300x8.drop_tip()
 
@@ -363,7 +362,7 @@ def run(protocol: protocol_api.ProtocolContext):
         protocol.delay(seconds=0, minutes=4, msg="Incubate at room temp while gDNA elutes")
 
         # Engage magnet module to pellet magbeads
-        magnetic_module.engage(height=mag_engage_height)
+        magnetic_module.engage(12)
         protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
     water_elution(2,26) # 5ul extra water added to elution volume
 
@@ -382,10 +381,10 @@ def run(protocol: protocol_api.ProtocolContext):
             elif column == 1:
                 aspirate_x_offset = 1.5
 
-            sourceLocation = mag_plate.wells()[sourceColumnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
+            sourceLocation = mag_plate.wells()[sourceColumnIndex].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
             destinationLocation = temp_plate.wells()[destinationColumnIndex].bottom(1.0)
 
-            p300x8.transfer(volume=transfer_volume,
+            p300x8.transfer(volume=transfer_volume*2, # Extra volume pull to get everything
                             source=sourceLocation,
                             dest=destinationLocation, # Dest is shifted over by 2 columns (into clean columns) for sample purity
                             new_tip='once',

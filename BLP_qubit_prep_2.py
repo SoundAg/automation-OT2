@@ -98,9 +98,9 @@ def run(protocol: protocol_api.ProtocolContext):
     p1000x1.pick_up_tip()
     for loop in range(0,2):
         if loop == 0:
-            destination_tube = qubit_working_solution_prep_tube_1_location.bottom(6)
+            destination_tube = qubit_working_solution_prep_tube_1_location.bottom(8)
         elif loop == 1:
-            destination_tube = qubit_working_solution_prep_tube_2_location.bottom(6)
+            destination_tube = qubit_working_solution_prep_tube_2_location.bottom(8)
 
         p1000x1.mix(repetitions=3,
                     volume=500,
@@ -110,7 +110,7 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Distribute qubit working solution among qubit tubes for standards
     p1000x1.transfer(volume=190,
-                    source=qubit_working_solution_prep_tube_1_location.bottom(6),
+                    source=qubit_working_solution_prep_tube_1_location.bottom(8),
                     dest=qubit_tube_carrier.wells()[0:2],
                     new_tip='never',
                     trash=False,

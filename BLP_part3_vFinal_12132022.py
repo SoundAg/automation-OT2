@@ -1,8 +1,8 @@
-# Script name: barcoded_library_prep_part3_v2.py
+# Script name: BLP_part3_vFinal_12132022.py
 # Directory path: cd C:\Users\Max\PycharmProjects\pythonProject\ot2_scripting
-# Command line simulation = opentrons_simulate.exe barcoded_library_prep_part3_v2.py -e
+# Command line simulation = opentrons_simulate.exe BLP_part3_vFinal_12132022.py -e
 
-# FIRST VERSION OF SCRIPT (v1)
+# SECOND VERSION OF SCRIPT, FINAL MAJOR UPDATES (vFinal)
 # Handles 6 pooled samples at a time from column 9 of a 96w plate
 
 from opentrons import protocol_api
@@ -68,11 +68,17 @@ def run(protocol: protocol_api.ProtocolContext):
 
             for well in range(0, len(sample_well_list)):
                 destinationWellIndex = sample_well_list[well]
+
+                if tube == 0:
+                    tube_adjustment_offset = 19
+                else:
+                    tube_adjustment_offset = 1.0
+
                 sourceLocation = reagent_tube_carrier.wells()[sourceWellIndex]
                 destinationLocation = temp_plate.wells()[destinationWellIndex]
                 p20x1.pick_up_tip()
                 p20x1.aspirate(volume=transfer_volume,
-                               location=sourceLocation.bottom(1.0),
+                               location=sourceLocation.bottom(tube_adjustment_offset),
                                rate=1.0)  # p20 gen2 single flow rate set to 2ul/sec above
                 # Move commands to mimic a tip-wipe to eliminate reagent droplets
                 for tip_wipe in range(0, 2):
@@ -102,6 +108,7 @@ def run(protocol: protocol_api.ProtocolContext):
                 p20x1.blow_out()
                 p20x1.drop_tip()
             reagent_tube_index += 1
+
     rxn_setup_from_tubes(6)
 
     # Mix adapter ligation rxn and incubate for 20min at 20C
@@ -120,6 +127,7 @@ def run(protocol: protocol_api.ProtocolContext):
             p300x8.blow_out(sourceLocation)
             p300x8.drop_tip(location=tipLocation)
             p300x8_tips1.return_tips(start_well=tipLocation, num_channels=8)
+
     pre_incubation_mix(1)
     temperature_module.set_temperature(20)
     protocol.delay(seconds=0, minutes=20, msg="20C hold for 20min")
@@ -135,7 +143,7 @@ def run(protocol: protocol_api.ProtocolContext):
         p20x1.pick_up_tip()
         for well in range(0, len(sample_well_list)):
             destinationWellIndex = sample_well_list[well]
-            destinationLocation = temp_plate.wells()[destinationWellIndex].top(-2.0)  # Dispense from just barely inside the well
+            destinationLocation = temp_plate.wells()[destinationWellIndex].top(-4.0)  # Dispense from just barely inside the well
             p20x1.transfer(volume=ampure_xp_beads_volume,
                            source=sourceLocation,
                            dest=destinationLocation,
@@ -146,7 +154,9 @@ def run(protocol: protocol_api.ProtocolContext):
                            touch_tip=True,
                            carryover=True)
         p20x1.drop_tip()
+
     ampure_bead_addition(6)
+
     total_rxn_volume = ligation_rxn_volume + ampure_xp_beads_volume
 
     # Hula mix replication
@@ -166,18 +176,19 @@ def run(protocol: protocol_api.ProtocolContext):
         p300x8.blow_out()
         p300x8.drop_tip(location=tipLocation)
         p300x8_tips1.return_tips(start_well=tipLocation, num_channels=8)
+
     hula_mix_replication(10, total_rxn_volume) # Mix for 10min
 
     # Transfer samples from temp module plate to mag module plate
     def temp_to_mag_transfer(transfer_volume, columnIndex):
-        sourceLocation = temp_plate.wells()[columnIndex].bottom(0)
+        sourceLocation = temp_plate.wells()[columnIndex].bottom(0.5)
         destinationLocation = mag_plate.wells()[columnIndex].center()
         tipLocation=p300x8_tips1.wells()[0]
 
         p300x8.flow_rate.aspirate = 94
         p300x8.flow_rate.dispense = 94
         p300x8.pick_up_tip()
-        p300x8.aspirate(volume=transfer_volume,
+        p300x8.aspirate(volume=transfer_volume+50, # Extra volume to get everything
                         location=sourceLocation,
                         rate=0.1)  # 10% default flowrate for better aspiration at well bottom
         p300x8.dispense(volume=transfer_volume,
@@ -186,11 +197,11 @@ def run(protocol: protocol_api.ProtocolContext):
         p300x8.blow_out()
         p300x8.drop_tip(location=tipLocation)
         p300x8_tips1.return_tips(start_well=tipLocation, num_channels=8)
+
     temp_to_mag_transfer(total_rxn_volume, 64)
 
     # Engage magnet module to pellet magbeads
-    mag_engage_height = 12.0  # This should bring magbeads to the bottom/right (odd-number columns) or bottom/left(even-number columns) of wells.
-    magnetic_module.engage(height=mag_engage_height)
+    magnetic_module.engage(12) # This should bring magbeads to the bottom/right (odd-number columns) or bottom/left(even-number columns)
     protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
 
     # Remove supernatant from magbeads
@@ -202,13 +213,14 @@ def run(protocol: protocol_api.ProtocolContext):
         tipLocation = p300x8_tips1.wells()[0]
 
         x_offset = -1.5
-        sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left well location
+        sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left well location
 
         p300x8.pick_up_tip(location=tipLocation)
         p300x8.aspirate(volume=total_rxn_volume,
                         location=sourceLocation,
                         rate=0.10)  # 10% very slow aspirate speed
         p300x8.drop_tip()
+
     supernatant_removal()
 
     # Disengage magnet for Long Fragment Buffer Addition, then wash with Long Fragment Buffer
@@ -234,9 +246,9 @@ def run(protocol: protocol_api.ProtocolContext):
         aspirate_x_offset = -1.5
         dispense_x_offset = 1.5
         sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns)
-        destinationLocation = mag_plate.wells()[columnIndex].top(-2.0).move(types.Point(x=dispense_x_offset, y=0, z=0))  # Top-right (odd-number columns)
+        destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=dispense_x_offset, y=0, z=0))  # Top-right (odd-number columns)
 
-        for loop in range(0,3):
+        for loop in range(0,5):
             p300x8.aspirate(volume=long_fragment_buffer,
                             location=sourceLocation,
                             rate=0.50)  # 50% slow aspirate
@@ -246,11 +258,11 @@ def run(protocol: protocol_api.ProtocolContext):
             p300x8.blow_out(destinationLocation)
 
         # Remove LFB from magbeads, using currently loaded tips
-        magnetic_module.engage(mag_engage_height)
+        magnetic_module.engage(12)
         protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
 
         aspirate_x_offset = -1.5
-        sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns)
+        sourceLocation = mag_plate.wells()[columnIndex].bottom(-0.5).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns)
 
         p300x8.aspirate(volume=long_fragment_buffer,
                         location=sourceLocation,
@@ -258,8 +270,9 @@ def run(protocol: protocol_api.ProtocolContext):
         p300x8.air_gap(volume=20)  # 20ul airgap to keep buffer from dripping
         p300x8.blow_out(location=protocol.fixed_trash['A1'])
         p300x8.drop_tip()
-    long_fragment_buffer_wash()
 
+    long_fragment_buffer_wash()
+    
     # Repeat Long Fragment Buffer Wash
     long_fragment_buffer_wash()
 
@@ -270,9 +283,9 @@ def run(protocol: protocol_api.ProtocolContext):
         magnetic_module.disengage()
         columnIndex = 64  # Well Index 64 to start at column 9
         # Add EB to column 9 magplate
-        sourceLocation = reagent_reservoir_plate.wells()[1].bottom(0)  # Elution Buffer located in wells A2:F2
+        sourceLocation = reagent_reservoir_plate.wells()[8].bottom(0.5)  # Elution Buffer located in wells A2:F2
         x_offset = 1.5
-        destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=x_offset, y=0, z=0))  # Upper-right (odd-numbered columns) in well
+        destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=x_offset, y=0, z=0))  # Upper-right (odd-numbered columns) in well
 
         p300x8.flow_rate.aspirate = 94  # default aspirate flow rate
         p300x8.flow_rate.dispense = 94  # default dispense flow rate
@@ -287,16 +300,16 @@ def run(protocol: protocol_api.ProtocolContext):
         # Now mix, using currently loaded tips
         aspirate_x_offset = -1.5
         dispense_x_offset = 1.5
-        sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns)
+        sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns)
         destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=dispense_x_offset, y=0, z=0))  # Middle-right (odd-number columns)
 
-        for loop in range(0, 5):
+        for loop in range(0, 30): # 15 Elution buffer washes
             p300x8.aspirate(volume=transfer_volume,
                             location=sourceLocation,
-                            rate=0.25)  # 25% slow aspirate due to low volume
+                            rate=0.25) # 25% slow aspirate due to low volume
             p300x8.dispense(volume=transfer_volume,
                             location=destinationLocation,
-                            rate=0.50)  # 50% slow aspirate due to low volume
+                            rate=3.0) # Faster dispense to dislodge beads
             p300x8.blow_out(destinationLocation)
         p300x8.drop_tip()
     elution_buffer_addition(elution_buffer)
@@ -315,7 +328,7 @@ def run(protocol: protocol_api.ProtocolContext):
         elif ((sourceColumnIndex/8)+1) % 2 != 0:
             aspirate_x_offset = -1.5
 
-        sourceLocation = mag_plate.wells()[sourceColumnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
+        sourceLocation = mag_plate.wells()[sourceColumnIndex].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
         destinationLocation = temp_plate.wells()[destinationColumnIndex].bottom(1.0)
 
         p300x8.transfer(volume=transfer_volume,
@@ -335,8 +348,8 @@ def run(protocol: protocol_api.ProtocolContext):
     temp_to_mag_transfer(elution_buffer, 72)
 
     # Separate eluate from magbeads, transferring back to temp module
-    magnetic_module.engage(mag_engage_height)
-    protocol.delay(seconds=0, minutes=2, msg="Wait for magnetic beads to pellet")
+    magnetic_module.engage(12)
+    protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
     mag_to_temp_transfer(elution_buffer, 72)
 
     # 4C hold to preserve prepped samples at end of script
