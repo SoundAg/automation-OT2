@@ -2,9 +2,9 @@
 # Directory path: cd C:\Users\Max\PycharmProjects\pythonProject\ot2_scripting
 # Command line simulation = opentrons_simulate.exe BLP_part1_vFinal_12132022.py -e
 
-# SECOND VERSION OF SCRIPT, FIRST MAJOR UPDATE 2 (v2.3)
+# SECOND VERSION OF SCRIPT, THIRD MAJOR UPDATE 2 (v2.3)
 # Handles 12 samples at a time
-# Changes made according to OT2 testing on 12/02/2022
+# Changes made according to OT2 testing on 02/01/2023
 
 from opentrons import protocol_api
 from opentrons import types
@@ -251,36 +251,7 @@ def run(protocol: protocol_api.ProtocolContext):
                         location=destinationLocation,
                         rate=0.5) # 50% gentle dispense to keep magbeads from getting knocked to bottom of wells
 
-    # Mix Ethanol in all wells 
-    for column in range(0,2): # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
-        columnIndex = column*8
-
-        if column == 0:
-            aspirate_x_offset = -1.5
-            dispense_x_offset = 1.5
-        elif column == 1:
-            aspirate_x_offset = 1.5
-            dispense_x_offset = -1.5
-
-        sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0)) # Bottom-left (odd columns) or right (even columns)
-        destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=dispense_x_offset, y=0, z=0)) # Top-right (odd-number columns) or left (even-numbered columns) in well
-
-        if column == 1:
-            p300x8.pick_up_tip(location=p300x8_tips1.wells()[24])
-        
-        for mix in range(0,1): # 1 EtOH wash
-            p300x8.aspirate(volume=ethanol_volume,
-                            location=sourceLocation,
-                            rate=0.5) # 50% slow aspirate for ethanol, also slow to reduce magbead pickup
-            p300x8.dispense(volume=ethanol_volume,
-                            location=destinationLocation,
-                            rate=0.15) # 15% super gentle drip-like dispense for delicate washing
-
-        p300x8.blow_out(destinationLocation)
-        p300x8.drop_tip(location=p300x8_tips1.wells()[columnIndex])
-        p300x8_tips1.return_tips(start_well=p300x8_tips1.wells()[columnIndex],num_channels=8)
-
-    # Remove Ethanol from magbeads
+    # Remove Ethanol from magbeads (first wash removal)
     for column in range(0,2):
         columnIndex = column*8
 
@@ -290,13 +261,12 @@ def run(protocol: protocol_api.ProtocolContext):
             aspirate_x_offset = 1.5
 
         sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0)) # Bottom-left (odd columns) or right (even columns)
-        p300x8.pick_up_tip()
         p300x8.aspirate(volume=300, # Full pipette volume for extra removal
                         location=sourceLocation,
                         rate=0.10) # 10% very slow aspirate speed
         #p300x8.air_gap(volume=20)  # 20ul airgap to keep ethanol from dripping
         p300x8.blow_out(location=protocol.fixed_trash['A1'])
-        p300x8.drop_tip()
+    p300x8.drop_tip()
 
     # Add Ethanol to all wells (second wash)
     ethanol_volume = 200
@@ -324,36 +294,7 @@ def run(protocol: protocol_api.ProtocolContext):
                         location=destinationLocation,
                         rate=0.5)  # 50% gentle dispense to keep magbeads from getting knocked to bottom of wells
 
-    # Mix Ethanol in all wells
-    for column in range(0,2):  # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
-        columnIndex = column * 8
-
-        if column == 0:
-            aspirate_x_offset = -1.5
-            dispense_x_offset = 1.5
-        elif column == 1:
-            aspirate_x_offset = 1.5
-            dispense_x_offset = -1.5
-
-        sourceLocation = mag_plate.wells()[columnIndex].bottom(1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
-        destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=dispense_x_offset, y=0, z=0))  # Top-right (odd-number columns) or left (even-numbered columns) in well
-
-        if column == 1:
-            p300x8.pick_up_tip(location=p300x8_tips1.wells()[40])
-
-        for mix in range(0,1):  # 1 EtOH wash
-            p300x8.aspirate(volume=ethanol_volume,
-                            location=sourceLocation,
-                            rate=0.5)  # 50% slow aspirate for ethanol, also slow to reduce magbead pickup
-            p300x8.dispense(volume=ethanol_volume,
-                            location=destinationLocation,
-                            rate=0.15)  # 15% super gentle drip-like dispense for delicate washing
-
-        p300x8.blow_out(destinationLocation)
-        p300x8.drop_tip(location=p300x8_tips1.wells()[columnIndex])
-        p300x8_tips1.return_tips(start_well=p300x8_tips1.wells()[columnIndex], num_channels=8)
-
-    # Remove Ethanol from magbeads
+    # Remove Ethanol from magbeads (second wash removal)
     for column in range(0, 2):
         columnIndex = column * 8
 
@@ -363,13 +304,11 @@ def run(protocol: protocol_api.ProtocolContext):
             aspirate_x_offset = 1.5
 
         sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
-        p300x8.pick_up_tip()
         p300x8.aspirate(volume=300, # Extra volume, full pipette volume of 300ul
                         location=sourceLocation,
                         rate=0.10)  # 10% very slow aspirate speed
-        #p300x8.air_gap(volume=20)  # 20ul airgap to keep ethanol from dripping
         p300x8.blow_out(location=protocol.fixed_trash['A1'])
-        p300x8.drop_tip()
+    p300x8.drop_tip()
 
     # Disengage magnet module
     magnetic_module.disengage()
@@ -426,7 +365,7 @@ def run(protocol: protocol_api.ProtocolContext):
         p300x8.drop_tip()
 
     # Delay to incubate at room temp
-    protocol.delay(seconds=0, minutes=4, msg="Incubate at room temp while gDNA elutes")
+    protocol.delay(seconds=0, minutes=2, msg="Incubate at room temp while gDNA elutes")
 
     # Engage magnet module to pellet magbeads
     magnetic_module.engage(14.5)
