@@ -202,7 +202,7 @@ def run(protocol: protocol_api.ProtocolContext):
         p300x8.drop_tip(location=p300x8_tips1.wells()[columnIndex])
 
     # Engage magnet module to pellet magbeads
-    magnetic_module.engage(12) # This should bring magbeads to the center/right (odd-number columns) or center/left(even-number columns) of wells. Reused in subsequent mag module steps.
+    magnetic_module.engage(14.5) # This should bring magbeads to the center/right (odd-number columns) or center/left(even-number columns) of wells. Reused in subsequent mag module steps.
     protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
 
     # Remove supernatant from magbeads
@@ -217,7 +217,7 @@ def run(protocol: protocol_api.ProtocolContext):
         if column == 1:
             x_offset = 1.5
 
-        sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=x_offset, y=0, z=0)) # Bottom left/bottom right well locations
+        sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=x_offset, y=0, z=0)) # Bottom left/bottom right well locations
 
         p300x8.pick_up_tip(location=p300x8_tips1.wells()[columnIndex])
         p300x8.aspirate(volume=total_rxn_volume,
@@ -429,7 +429,7 @@ def run(protocol: protocol_api.ProtocolContext):
     protocol.delay(seconds=0, minutes=4, msg="Incubate at room temp while gDNA elutes")
 
     # Engage magnet module to pellet magbeads
-    magnetic_module.engage(12)
+    magnetic_module.engage(14.5)
     protocol.delay(seconds=0, minutes=2, msg="Wait for magnetic beads to pellet")
 
     # Separate eluate from magbeads
