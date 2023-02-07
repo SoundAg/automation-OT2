@@ -192,53 +192,54 @@ def run(protocol: protocol_api.ProtocolContext):
                             rate=1.0)
             p300x8.blow_out()
             p300x8.drop_tip(location=tipLocation)
-    temp_to_mag_transfer(2,total_rxn_volume+100)
+    temp_to_mag_transfer(2,total_rxn_volume+10)
 
     # Engage magnet module to pellet magbeads
     magnetic_module.engage(14.5) # This should bring magbeads to the bottom/right (odd-number columns) or bottom/left(even-number columns)
     protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
 
-    # Remove supernatant from magbeads
-    def supernatant_removal(column_count):
+    # Remove supernatant from magbeads, first column only
+    def supernatant_removal(column_index):
         p300x8.flow_rate.aspirate = 94  # Slow flow rate to minimize magbead loss
         p300x8.flow_rate.dispense = 94
-        for column in range(0, column_count):
-            columnIndex = 32 + (column * 8) # Well Index 32 to start at column 5
-            tipLocation = p300x8_tips1.wells()[column*8]
 
-            if column == 0:
-                x_offset = -1.5
-            if column == 1:
-                x_offset = 1.5
+        if column_index == 32:
+            tipLocation = p300x8_tips1.wells()[0]
+            x_offset = -1.5
+        if column_index == 40:
+            tipLocation = p300x8_tips1.wells()[8]
+            x_offset = 1.5
 
-            sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left/bottom right well locations
+        sourceLocation = mag_plate.wells()[column_index].bottom(0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left/bottom right well locations
 
-            p300x8.pick_up_tip(location=tipLocation)
-            p300x8.aspirate(volume=total_rxn_volume,
-                            location=sourceLocation,
-                            rate=0.10)  # 10% very slow aspirate speed
-            p300x8.drop_tip()
-    supernatant_removal(2)
+        p300x8.pick_up_tip(location=tipLocation)
+        p300x8.aspirate(volume=total_rxn_volume,
+                        location=sourceLocation,
+                        rate=0.10) # 10% very slow aspirate speed
+        p300x8.drop_tip()
 
-    # Ethanol wash 1
-    def gentle_ethanol_wash(column_count, residual_ethanol_removal_volume):
-        # Add Ethanol to all wells
+    supernatant_removal(32) # Well index 32 for column 5 supernatant removal
+
+    # 2x Ethanol washes, first column only
+    def gentle_ethanol_wash(column_index, residual_ethanol_removal_volume):
         ethanol_volume = 200
-        sourceLocation = ethanol_reservoir.wells()[0].bottom(1.5)
         p300x8.flow_rate.aspirate = 94  # Default flow rate
         p300x8.flow_rate.dispense = 94
 
-        p300x8.pick_up_tip()
-        for column in range(0, column_count):  # Add EtOH to both columns to keep beads from drying
-            columnIndex = 32 + (column * 8)
+        if column_index == 32:
+            tipLocation = p300x8_tips1.wells()[0]
+            x_offset = 1.5
+        if column_index == 40:
+            tipLocation = p300x8_tips1.wells()[8]
+            x_offset = -1.5
 
-            if column == 0:
-                x_offset = 1.5
-            elif column == 1:
-                x_offset = -1.5
+        sourceLocation = ethanol_reservoir.wells()[0].bottom(1.5)
+        destinationLocation = mag_plate.wells()[column_index].top(-4.0).move(types.Point(x=x_offset, y=0, z=0))  # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
 
-            destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=x_offset, y=0, z=0))  # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
+        p300x8.pick_up_tip(location=tipLocation)
 
+        for each in range(0,2): # Loop through 2 EtOH washes
+            # Add Ethanol to magbeads
             p300x8.aspirate(volume=ethanol_volume,
                             location=sourceLocation,
                             rate=0.5)  # 50% slow aspirate for ethanol
@@ -247,94 +248,81 @@ def run(protocol: protocol_api.ProtocolContext):
                             location=destinationLocation,
                             rate=0.15)  # 15% gentle drip dispense to keep magbeads from getting knocked to bottom of wells
 
-        # Remove Ethanol from magbeads
-        for column in range(0, column_count):
-            columnIndex = 32 + (column * 8)
-
-            if column == 0:
+            # Remove Ethanol from magbeads
+            if column_index == 32:
                 aspirate_x_offset = -1.5
-            elif column == 1:
+            if column_index == 40:
                 aspirate_x_offset = 1.5
 
-            sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
+            sourceLocation = mag_plate.wells()[column_index].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
 
             p300x8.aspirate(volume=ethanol_volume+residual_ethanol_removal_volume,
                             location=sourceLocation,
                             rate=0.10)  # 10% very slow aspirate speed
             p300x8.air_gap(volume=20)  # 20ul airgap to keep ethanol from dripping
             p300x8.blow_out(location=protocol.fixed_trash['A1'])
-        p300x8.drop_tip()
-    gentle_ethanol_wash(2,0)
 
-    # Ethanol wash 2
-    gentle_ethanol_wash(2,25)
+        p300x8.drop_tip()
+
+    gentle_ethanol_wash(32,25) # Well index 32 for column 5 ethanol washes
 
     # Disengage magnet module
     magnetic_module.disengage()
 
-    # Delay to evaporate residual Ethanol
-    protocol.delay(seconds=0, minutes=2, msg="Wait for residual Ethanol to evaporate")
-
-    # Elute gDNA from magbeads
-    def water_elution(column_count, water_volume):
+    # Elute gDNA from magbeads, first column only
+    def water_elution(column_index, water_volume):
         # Water addition
         p300x8.flow_rate.aspirate = 94  # Reset flow rate to default
         p300x8.flow_rate.dispense = 94  # Reset flow rate to default
 
+        if column_index == 32:
+            aspirate_x_offset = -1.5
+            dispense_x_offset = 1.5
+        if column_index == 40:
+            aspirate_x_offset = 1.5
+            dispense_x_offset = -1.5
+
         sourceLocation = water_reservoir.wells()[0]
+        destinationLocation = mag_plate.wells()[column_index].top(-4.0).move(types.Point(x=dispense_x_offset, y=0, z=0))
 
         p300x8.pick_up_tip()
-        p300x8.aspirate(volume=(water_volume * column_count) + 10,  # Multiaspirate with extra volume
+        p300x8.aspirate(volume=water_volume,
                         location=sourceLocation,
                         rate=1.0)
+        p300x8.dispense(volume=water_volume,
+                        location=destinationLocation,
+                        rate=1.0)  # Standard water dispense
 
-        for dispense in range(0,column_count):
-            columnIndex = 32 + (dispense * 8)
-            if dispense == 0:
-                dispense_x_offset = 1.5
-            elif dispense == 1:
-                dispense_x_offset = -1.5
-            destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=dispense_x_offset, y=0, z=0))
+        # Now mix to resuspend magbeads in water
+        sourceLocation = mag_plate.wells()[column_index].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))
+        destinationLocation = mag_plate.wells()[column_index].center().move(types.Point(x=dispense_x_offset, y=0, z=0))
 
+        for mix in range(0, 30):  # 30 mixes
+            p300x8.aspirate(volume=water_volume,
+                            location=sourceLocation,
+                            rate=1.0)
             p300x8.dispense(volume=water_volume,
                             location=destinationLocation,
-                            rate=1.0)  # Standard water dispense
-            p300x8.touch_tip()
+                            rate=3.0)  # Faster dispense to knock magbeads off well sides
+        p300x8.blow_out(destinationLocation)
+        p300x8.drop_tip()
 
-        p300x8.blow_out(sourceLocation.top(-4.0))
+    water_elution(32,26) # Elute in 26ul water
 
-        # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
-        for column in range(0,column_count):
-            columnIndex = 32 + (column * 8)
-            if column == 0:
-                aspirate_x_offset = -1.5
-                dispense_x_offset = 1.5
-            elif column == 1:
-                aspirate_x_offset = 1.5
-                dispense_x_offset = -1.5
-            sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))
-            destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=dispense_x_offset, y=0, z=0))
-
-            if column == 1:
-                p300x8.pick_up_tip()
-
-            for mix in range(0, 30):  # 30 Water washes
-                p300x8.aspirate(volume=water_volume,
-                                location=sourceLocation,
-                                rate=1.0) 
-                p300x8.dispense(volume=water_volume,
-                                location=destinationLocation,
-                                rate=3.0)  # Faster dispense to knock magbeads off well sides
-            p300x8.blow_out(destinationLocation)
-            p300x8.drop_tip()
-
-        # Delay to incubate at room temp
-        protocol.delay(seconds=0, minutes=2, msg="Incubate at room temp while gDNA elutes")
-
-        # Engage magnet module to pellet magbeads
-        magnetic_module.engage(14.5)
-        protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
-    water_elution(2,26) 
+    # Re-engage magnet module; second column sample processing starts here
+    magnetic_module.engage(14.5)
+    protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
+    # Remove supernatant from magbeads, second column only
+    supernatant_removal(40)
+    # 2x Ethanol washes, second column only
+    gentle_ethanol_wash(40,25)
+    # Disengage magnet module
+    magnetic_module.disengage()
+    # Elute gDNA from magbeads, second column only
+    water_elution(40,26)
+    # Engage magnet module to pellet all magbeads
+    magnetic_module.engage(14.5)
+    protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
 
     # Transfer eluate from mag module plate to temp module plate
     def mag_to_temp_transfer(column_count, transfer_volume):
