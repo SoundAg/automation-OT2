@@ -158,10 +158,7 @@ def run(protocol: protocol_api.ProtocolContext):
                             location=destinationLocation,
                             rate=1.0) # Rate of 15ul/sec specified above
             p20x1.blow_out()
-            p20x1.touch_tip(#location=,
-                            radius=1.0,
-                            v_offset=-3.0,
-                            speed=80)
+
     p20x1.drop_tip()
 
     total_rxn_volume += ampure_xp_beads
@@ -205,44 +202,37 @@ def run(protocol: protocol_api.ProtocolContext):
     magnetic_module.engage(14.5) # This should bring magbeads to the center/right (odd-number columns) or center/left(even-number columns) of wells. Reused in subsequent mag module steps.
     protocol.delay(seconds=0, minutes=3, msg="Wait for magnetic beads to pellet")
 
-    # Remove supernatant from magbeads
-    p300x8.flow_rate.aspirate = 94 # p300 multi gen2 default flowrate = 94 ul/sec
-    p300x8.flow_rate.dispense = 94
-
-    for column in range(0,2):
-        columnIndex = column*8
-
-        if column == 0:
+    ### COLUMNWISE PROCESSING STEPS ###
+    def columnwiseProcessing(columnIndex):
+        # Remove supernatant from magbeads
+        if columnIndex == 0:
             x_offset = -1.5
-        if column == 1:
+        if columnIndex == 8:
             x_offset = 1.5
 
-        sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=x_offset, y=0, z=0)) # Bottom left/bottom right well locations
+        sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=x_offset, y=0, z=0))  # Bottom left/bottom right well locations
+
+        p300x8.flow_rate.aspirate = 94 # p300 multi gen2 default flowrate = 94 ul/sec
+        p300x8.flow_rate.dispense = 94
 
         p300x8.pick_up_tip(location=p300x8_tips1.wells()[columnIndex])
         p300x8.aspirate(volume=total_rxn_volume,
                         location=sourceLocation,
-                        rate=0.10) # 10% very slow aspirate speed
+                        rate=0.10)  # 10% very slow aspirate speed
         p300x8.drop_tip()
 
-    # Add Ethanol to all wells (first wash)
-    ethanol_volume = 200
-    sourceLocation = ethanol_reservoir.wells()[0].bottom(2.0)
+        # Add Ethanol (first wash)
+        ethanol_volume = 200
 
-    p300x8.flow_rate.aspirate = 94  # p300 multi gen2 default flowrate = 94 ul/sec
-    p300x8.flow_rate.dispense = 94
-
-    p300x8.pick_up_tip()
-    for column in range(0,2): # Add EtOH to both columns to keep beads from drying 
-        columnIndex = column*8
-
-        if column == 0:
+        if columnIndex == 0:
             x_offset = 1.5
-        elif column == 1:
+        if columnIndex == 8:
             x_offset = -1.5
 
-        destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=x_offset, y=0, z=0)) # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
-        
+        sourceLocation = ethanol_reservoir.wells()[0].bottom(2.0)
+        destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=x_offset, y=0,z=0))  # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
+
+        p300x8.pick_up_tip()
         p300x8.aspirate(volume=ethanol_volume,
                         location=sourceLocation,
                         rate=0.5) # 50% slow aspirate for ethanol
@@ -251,41 +241,32 @@ def run(protocol: protocol_api.ProtocolContext):
                         location=destinationLocation,
                         rate=0.5) # 50% gentle dispense to keep magbeads from getting knocked to bottom of wells
 
-    # Remove Ethanol from magbeads (first wash removal)
-    for column in range(0,2):
-        columnIndex = column*8
-
-        if column == 0:
+        # Remove Ethanol (first wash removal)
+        if columnIndex == 0:
             aspirate_x_offset = -1.5
-        elif column == 1:
+        if columnIndex == 8:
             aspirate_x_offset = 1.5
 
         sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0)) # Bottom-left (odd columns) or right (even columns)
+
         p300x8.aspirate(volume=300, # Full pipette volume for extra removal
                         location=sourceLocation,
                         rate=0.10) # 10% very slow aspirate speed
-        #p300x8.air_gap(volume=20)  # 20ul airgap to keep ethanol from dripping
         p300x8.blow_out(location=protocol.fixed_trash['A1'])
-    p300x8.drop_tip()
+        p300x8.drop_tip()
 
-    # Add Ethanol to all wells (second wash)
-    ethanol_volume = 200
-    sourceLocation = ethanol_reservoir.wells()[0].bottom(2.0)
+        # Add Ethanol (second wash)
+        ethanol_volume = 200
 
-    p300x8.flow_rate.aspirate = 94  # p300 multi gen2 default flowrate = 94 ul/sec
-    p300x8.flow_rate.dispense = 94
-
-    p300x8.pick_up_tip()
-    for column in range(0, 2):  # Add EtOH to both columns to keep beads from drying
-        columnIndex = column * 8
-
-        if column == 0:
+        if columnIndex == 0:
             x_offset = 1.5
-        elif column == 1:
+        if columnIndex == 8:
             x_offset = -1.5
 
+        sourceLocation = ethanol_reservoir.wells()[0].bottom(2.0)
         destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=x_offset, y=0, z=0))  # Upper-right (odd-numbered columns) or upper left (even-numbered columns) in well
 
+        p300x8.pick_up_tip()
         p300x8.aspirate(volume=ethanol_volume,
                         location=sourceLocation,
                         rate=0.5)  # 50% slow aspirate for ethanol
@@ -294,75 +275,59 @@ def run(protocol: protocol_api.ProtocolContext):
                         location=destinationLocation,
                         rate=0.5)  # 50% gentle dispense to keep magbeads from getting knocked to bottom of wells
 
-    # Remove Ethanol from magbeads (second wash removal)
-    for column in range(0, 2):
-        columnIndex = column * 8
-
-        if column == 0:
+        # Remove Ethanol (second wash removal)
+        if columnIndex == 0:
             aspirate_x_offset = -1.5
-        elif column == 1:
+        if columnIndex == 8:
             aspirate_x_offset = 1.5
 
         sourceLocation = mag_plate.wells()[columnIndex].bottom(-1.0).move(types.Point(x=aspirate_x_offset, y=0, z=0))  # Bottom-left (odd columns) or right (even columns)
+
         p300x8.aspirate(volume=300, # Extra volume, full pipette volume of 300ul
                         location=sourceLocation,
                         rate=0.10)  # 10% very slow aspirate speed
         p300x8.blow_out(location=protocol.fixed_trash['A1'])
-    p300x8.drop_tip()
+        p300x8.drop_tip()
 
-    # Disengage magnet module
-    magnetic_module.disengage()
+        # Disengage magnet module
+        magnetic_module.disengage()
 
-    # Delay to evaporate residual Ethanol
-    protocol.delay(seconds=0, minutes=2, msg="Wait for residual Ethanol to evaporate")
-
-    # Water elution
-    water_volume = 61
-    sourceLocation = water_reservoir.wells()[0]
-
-    p300x8.pick_up_tip()
-    p300x8.aspirate(volume=(water_volume * 2) + 10,  # Multiaspirate with extra volume
-                    location=sourceLocation,
-                    rate=1.0)
-
-    destinationLocation = mag_plate.wells()[0].top(-4.0).move(types.Point(x=1.0, y=0, z=0))  # Upper-right in well; First dispense
-    p300x8.dispense(volume=water_volume,
-                    location=destinationLocation,
-                    rate=1.0)
-    p300x8.touch_tip()
-
-    destinationLocation = mag_plate.wells()[8].top(-4.0).move(types.Point(x=-1.0, y=0, z=0))  # Upper-left in well; Second dispense
-    p300x8.dispense(volume=water_volume,
-                    location=destinationLocation,
-                    rate=1.0)
-    p300x8.touch_tip()
-    p300x8.blow_out(sourceLocation.top(-4.0))
-
-    for column in range(0,2):  # Now mix both columns, using currently loaded tips for the first and loading new ones for the second
-        columnIndex = column * 8
-
-        if column == 0:
+        # Water elution
+        water_volume = 61
+        if columnIndex == 0:
+            dispense_offset = 1.0
+        if columnIndex == 8:
+            dispense_offset = -1.0
+        sourceLocation = water_reservoir.wells()[0]
+        p300x8.pick_up_tip()
+        p300x8.aspirate(volume=water_volume,
+                        location=sourceLocation,
+                        rate=1.0)
+        destinationLocation = mag_plate.wells()[columnIndex].top(-4.0).move(types.Point(x=dispense_offset, y=0, z=0))
+        p300x8.dispense(volume=water_volume,
+                        location=destinationLocation,
+                        rate=1.0)
+        if columnIndex == 0:
             aspirate_x_offset = -1.5
             dispense_x_offset = 1.5
-        elif column == 1:
+        if columnIndex == 8:
             aspirate_x_offset = 1.5
             dispense_x_offset = -1.5
-
         sourceLocation = mag_plate.wells()[columnIndex].bottom(0).move(types.Point(x=aspirate_x_offset, y=0, z=0))
         destinationLocation = mag_plate.wells()[columnIndex].center().move(types.Point(x=dispense_x_offset, y=0, z=0))
-
-        if column == 1:
-            p300x8.pick_up_tip()
 
         for mix in range(0, 15):  # 15 Water washes
             p300x8.aspirate(volume=water_volume,
                             location=sourceLocation,
-                            rate=1.0)  
+                            rate=1.0)
             p300x8.dispense(volume=water_volume,
                             location=destinationLocation,
                             rate=3.0)  # Faster dispense to dislodge magbeads
         p300x8.blow_out(destinationLocation)
         p300x8.drop_tip()
+
+    columnwiseProcessing(0) # COLUMN 1 PROCESSING
+    columnwiseProcessing(8) # COLUMN 2 PROCESSING
 
     # Delay to incubate at room temp
     protocol.delay(seconds=0, minutes=2, msg="Incubate at room temp while gDNA elutes")
